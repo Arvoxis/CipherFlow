@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Data & artifacts (regenerable / large)
+data_out/
+artifacts/
+raw/
+*.pcap
+*.pcapng
+*.parquet
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

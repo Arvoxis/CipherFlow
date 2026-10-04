@@ -1,0 +1,53 @@
+# CipherFlow — central configuration.
+# Every script loads this via cipherflow.utils.load_config(). Override on the CLI with
+# --set key=value (see utils.load_config for the tiny override syntax).
+
+seed: 42
+
+# ---- Flow representation ------------------------------------------------------
+flow:
+  seq_len: 32          # packets per flow used as the token sequence (first N packets)
+  size_bins: 32        # quantization bins for packet size (log-scaled)
+  iat_bins: 16         # quantization bins for inter-arrival time (log-scaled, ms)
+  max_size: 1500       # bytes; sizes clipped to this (typical MTU) before binning
+  max_iat_ms: 10000.0  # ms; inter-arrival times clipped to this before binning
+
+# ---- Model (kept small for 6 GB VRAM) ----------------------------------------
+model:
+  d_model: 128         # embedding / hidden width
+  n_layers: 4          # transformer encoder layers
+  n_heads: 4           # attention heads
+  d_ff: 256            # feed-forward width
+  dropout: 0.1
+
+# ---- Masked-flow pretraining (Claim B) ---------------------------------------
+pretrain:
+  mask_prob: 0.15      # fraction of packet positions masked
+  epochs: 20
+  batch_size: 128
+  lr: 0.0003
+  weight_decay: 0.01
+  warmup_steps: 500
+  amp: true            # mixed precision (fp16) — big VRAM saver on the 3050
+  ckpt_path: "artifacts/pretrained.pt"
+
+# ---- Fine-tuning (downstream classification) ---------------------------------
+finetune:
+  epochs: 15
+  batch_size: 128
+  lr: 0.0002
+  weight_decay: 0.01
+  freeze_encoder: false   # set true for linear-probe experiments
+  amp: true
+  ckpt_path: "artifacts/classifier.pt"
+
+# ---- Robustness (Claim C) ----------------------------------------------------
+robustness:
+  pad_prob: 0.5        # prob a packet gets padded during augmentation
+  pad_max_frac: 0.5    # max fractional size increase when padding
+  jitter_std_ms: 5.0   # gaussian timing jitter std added to IAT (ms)
+
+# ---- Paths -------------------------------------------------------------------
+paths:
+  data_dir: "data_out"          # where extracted/synthetic parquet lands
+  artifacts_dir: "artifacts"    # checkpoints, plots, logs
