@@ -15,7 +15,7 @@ is blind, and stays accurate when an attacker pads packets or jitters timing.
 ## Architecture
 
 ```
-pcap ──► extract_flows (nfstream) ──► flows.parquet ──► FlowTokenizer (Claim A)
+pcap ──► extract_pcap (dpkt) ──► flows.parquet ──► FlowTokenizer (Claim A)
                                                              │  (size,iat,dir) → tokens
                                                              ▼
                           ┌──────────── FlowFormer encoder (small Transformer) ───────────┐
@@ -31,28 +31,23 @@ pcap ──► extract_flows (nfstream) ──► flows.parquet ──► FlowTo
 
 ## Setup
 
-**Option A — conda (recommended; easiest GPU):**
 ```bash
 conda create -n ml python=3.11 -y
 conda activate ml
-pip install -r requirements.txt
-# torch CUDA build for the RTX 3050:
+# torch CUDA build first, so nothing else drags in a CPU wheel over it:
 pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install -e ".[dev]"
 ```
 
-**Option B — venv:**
+The editable install is what makes `python -m cipherflow.*` work from any directory instead
+of only from the repo root. Verify the env in one line:
+
 ```bash
-python -m venv .venv
-.venv\Scripts\activate                      # Windows PowerShell
-pip install -r requirements.txt
+python -c "import torch,pyarrow,xgboost,streamlit,dpkt; print('ok', torch.cuda.is_available())"
 ```
 
-> **Whichever env you pick, install ALL of `requirements.txt` into it** — running with a
-> different interpreter that is missing `pyarrow`/`xgboost`/`streamlit` will fail at the first
-> parquet write. Verify with: `python -c "import torch,pyarrow,xgboost,streamlit; print('ok')"`.
-
-**GPU (RTX 3050 6 GB):** the CUDA torch build above enables GPU training (auto-detected).
-Everything runs on CPU too (just slower). The model is sized to fit 6 GB VRAM.
+**GPU (RTX 3050 6 GB):** the CUDA wheel above enables GPU training, auto-detected. Everything
+runs on CPU too, just slower, and the model is sized to fit 6 GB.
 
 ## One-command demo (everything, reproducible)
 
@@ -97,11 +92,20 @@ python -m streamlit run cipherflow/serve/app.py
 
 ## Using real data
 See [`cipherflow/data/download.md`](cipherflow/data/download.md) for ISCXVPN2016,
-CIC-Darknet2020, CIC-IDS2017/CTU-13, then:
+CIC-Darknet2020, CIC-IDS2017/CTU-13. Extraction goes through dpkt:
 ```bash
-python -m cipherflow.data.extract_flows --pcap "raw/*.pcap" --dataset iscx --out data_out/iscx.parquet
+python -m cipherflow.data.extract_pcap --pcap "raw/*.pcap" --dataset iscx --out data_out/iscx.parquet
+python -m cipherflow.data.extract_pcap --dir raw/mycapture --out data_out/selfcap.parquet   # label = file stem
 ```
 All later commands accept `--data data_out/iscx.parquet`.
+
+> `nfstream` hangs on Windows when reading a capture, so `extract_flows.py` is kept only as a
+> non-Windows fallback. Use `extract_pcap.py`.
+
+Capturing your own traffic (Windows, needs Wireshark's `dumpcap` on PATH):
+```powershell
+.\scripts\capture_traffic.ps1
+```
 
 ## Layout
 | Path | What |
@@ -113,15 +117,30 @@ All later commands accept `--data data_out/iscx.parquet`.
 | `cipherflow/robustness/` | Evasion augmentation + robustness eval (**Claim C**) |
 | `cipherflow/eval/` | Few-shot experiment, plots, **embedding map** |
 | `cipherflow/tokenizer/inspect.py` | **Tokenization inspector** (Claim A, CLI + demo) |
-| `cipherflow/serve/` | Streamlit live demo (3 tabs) |
+| `cipherflow/serve/` | Streamlit live demo (5 tabs) |
 | `cipherflow/deliverables/` | Patent draft, results, slide outline, **figure generator** |
 | `cipherflow/pipeline.py` | One-command end-to-end orchestrator |
-| `configs/default.yaml` | All hyperparameters (override with `--set key=value`) |
+| `cipherflow/provenance.py` | Run stamping: commit + config hash + seed per artifact |
+| `cipherflow/configs/default.yaml` | All hyperparameters (override with `--set key=value`) |
 
 ## Config overrides
-Any config value can be overridden inline, e.g. `--set model.d_model=64 pretrain.epochs=3`.
+Any config value can be overridden inline on any entry point, the pipeline included:
+```bash
+python -m cipherflow.pipeline --quick --set model.d_model=64 pretrain.epochs=3
+```
+
+## Provenance
+Every pipeline run appends a record to `artifacts/run_manifest.json`: UTC timestamp, git
+commit, dirty flag, config hash, seed, device and package versions. That is the dated
+reduction-to-practice trail behind the claims, and it makes "reproduce table 2" mechanical.
+
+```bash
+python -m cipherflow.provenance        # print the current stamp
+```
 
 ## Sanity check
 ```bash
-python -m tests.test_smoke        # tokenizer round-trip + tiny forward/backward pass
+pytest -q                         # tokenizer round-trip + tiny forward/backward pass
+ruff check cipherflow tests
 ```
+CI (`.github/workflows/ci.yml`) runs the same two plus a tiny end-to-end pipeline on every push.

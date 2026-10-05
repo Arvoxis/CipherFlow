@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cipherflow"
+version = "0.2.0"
+description = "Self-supervised foundation model for payload-free encrypted-traffic classification"
+requires-python = ">=3.10"
+license = { text = "Proprietary — all rights reserved, pre-patent" }
+authors = [
+    { name = "Rakshit Sinha" },
+    { name = "Suyash Dabholkar" },
+]
+dependencies = [
+    "torch>=2.1",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.3",
+    "xgboost>=2.0",
+    "matplotlib>=3.7",
+    "seaborn>=0.12",
+    "tqdm>=4.66",
+    "streamlit>=1.30",
+    "dpkt>=1.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff>=0.6"]
+
+[project.scripts]
+cipherflow = "cipherflow.pipeline:main"
+
+[tool.setuptools.packages.find]
+include = ["cipherflow*"]
+
+[tool.setuptools.package-data]
+cipherflow = ["configs/*.yaml"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# These are house style in this codebase, not defects:
+#   E501 long lines are mostly docstrings and printed report strings
+#   E702 `model.eval(); head.eval()` paired calls read better on one line
+#   E402 the sys.path bootstrap in serve/app.py and deliberate local imports
+#   E731 small lambdas for one-off key functions
+#   B008 Streamlit/argparse idiom puts calls in defaults
+ignore = ["E501", "E702", "E402", "E731", "B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

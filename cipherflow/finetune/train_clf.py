@@ -10,6 +10,7 @@ Run:
     # from-scratch baseline, only 10 labels/class
     python -m cipherflow.finetune.train_clf --pretrained none --few-shot 10
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,8 +48,7 @@ def load_pretrained_backbone(model: FlowFormer, path: str, device) -> None:
     ckpt = torch.load(path, map_location=device)
     state = ckpt["model"] if "model" in ckpt else ckpt
     missing, unexpected = model.load_state_dict(state, strict=False)
-    print(f"Loaded pretrained backbone from {path} "
-          f"(missing={len(missing)}, unexpected={len(unexpected)})")
+    print(f"Loaded pretrained backbone from {path} (missing={len(missing)}, unexpected={len(unexpected)})")
 
 
 def build_loaders(records, y, tok, cfg, seed, few_shot=None, augment=False, hybrid=False):
@@ -59,15 +59,18 @@ def build_loaders(records, y, tok, cfg, seed, few_shot=None, augment=False, hybr
     if few_shot:
         sub = few_shot_subsample(y[tr], few_shot, seed)
         tr = tr[sub]
-    print(f"split: train={len(tr)} val={len(va)} test={len(te)}"
-          + (f" (few-shot={few_shot}/class)" if few_shot else "")
-          + (" [adversarial aug]" if augment else "")
-          + (" [hybrid feats]" if hybrid else ""))
+    print(
+        f"split: train={len(tr)} val={len(va)} test={len(te)}"
+        + (f" (few-shot={few_shot}/class)" if few_shot else "")
+        + (" [adversarial aug]" if augment else "")
+        + (" [hybrid feats]" if hybrid else "")
+    )
 
     # Hybrid: statistical features standardized with train-set statistics only.
     feats_all, scaler = None, None
     if hybrid:
         from cipherflow.finetune.features import apply_scaler, compute_features, fit_scaler
+
         feats_all = compute_features(records)
         mean, std = fit_scaler(feats_all[tr])
         feats_all = apply_scaler(feats_all, mean, std)
@@ -81,6 +84,7 @@ def build_loaders(records, y, tok, cfg, seed, few_shot=None, augment=False, hybr
     # Optional evasion augmentation on the TRAIN split only (Claim C defense).
     if augment and not hybrid:
         from cipherflow.robustness.transforms import AugmentedFlowDataset
+
         train_ds = AugmentedFlowDataset([records[i] for i in tr], tok, cfg, labels=y[tr], seed=seed)
     else:
         train_ds = make(tr)
@@ -105,7 +109,8 @@ def pooled_feature(model, batch):
 
 @torch.no_grad()
 def evaluate(model, head, dl, device):
-    model.eval(); head.eval()
+    model.eval()
+    head.eval()
     ys, ps = [], []
     for batch in dl:
         batch = {k: v.to(device) for k, v in batch.items()}
@@ -116,19 +121,25 @@ def evaluate(model, head, dl, device):
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "macro_f1": float(f1_score(y_true, y_pred, average="macro")),
-        "y_true": y_true, "y_pred": y_pred,
+        "y_true": y_true,
+        "y_pred": y_pred,
     }
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", type=str, default=None)
-    ap.add_argument("--pretrained", type=str, default="artifacts/pretrained.pt",
-                    help="path to pretrained backbone, or 'none' for from-scratch")
+    ap.add_argument(
+        "--pretrained",
+        type=str,
+        default="artifacts/pretrained.pt",
+        help="path to pretrained backbone, or 'none' for from-scratch",
+    )
     ap.add_argument("--few-shot", type=int, default=None, help="labels per class (default: all)")
     ap.add_argument("--augment", action="store_true", help="adversarial (padding+jitter) training aug")
-    ap.add_argument("--hybrid", action="store_true",
-                    help="hybrid head: CipherFlow embedding + statistical flow features")
+    ap.add_argument(
+        "--hybrid", action="store_true", help="hybrid head: CipherFlow embedding + statistical flow features"
+    )
     ap.add_argument("--metrics-out", type=str, default=None, help="write metrics json here")
     ap.add_argument("--set", dest="overrides", nargs="*", default=[])
     args = ap.parse_args()
@@ -137,7 +148,9 @@ def main():
     set_seed(cfg["seed"])
     device = get_device()
 
-    data_path = Path(args.data) if args.data else (resolve_path(cfg, "paths", "data_dir") / "synthetic.parquet")
+    data_path = (
+        Path(args.data) if args.data else (resolve_path(cfg, "paths", "data_dir") / "synthetic.parquet")
+    )
     df = load_flows(data_path)
     df, y, label_names = encode_labels(df)
     records = to_flow_records(df)
@@ -145,17 +158,24 @@ def main():
 
     tok = FlowTokenizer(cfg)
     train_dl, val_dl, test_dl, feat_scaler = build_loaders(
-        records, y, tok, cfg, cfg["seed"], args.few_shot, args.augment, args.hybrid)
+        records, y, tok, cfg, cfg["seed"], args.few_shot, args.augment, args.hybrid
+    )
 
     model = FlowFormer(cfg, tok.size_bins, tok.iat_bins).to(device)
     if args.pretrained and args.pretrained.lower() != "none":
-        p = args.pretrained if Path(args.pretrained).is_absolute() else str(resolve_path(cfg, "paths", "artifacts_dir").parent / args.pretrained)
+        p = (
+            args.pretrained
+            if Path(args.pretrained).is_absolute()
+            else str(resolve_path(cfg, "paths", "artifacts_dir").parent / args.pretrained)
+        )
         load_pretrained_backbone(model, p, device)
     else:
         print("Training backbone from scratch (no pretraining).")
 
     n_feats = feat_scaler[0].shape[0] if feat_scaler else 0
-    head = ClassifierHead(model.pool_dim + n_feats, len(label_names), dropout=cfg["model"]["dropout"]).to(device)
+    head = ClassifierHead(model.pool_dim + n_feats, len(label_names), dropout=cfg["model"]["dropout"]).to(
+        device
+    )
 
     fc = cfg["finetune"]
     if fc["freeze_encoder"]:
@@ -170,7 +190,8 @@ def main():
 
     best_f1, best_state = -1.0, None
     for ep in range(1, fc["epochs"] + 1):
-        model.train(not fc["freeze_encoder"]); head.train()
+        model.train(not fc["freeze_encoder"])
+        head.train()
         tot = 0.0
         for batch in train_dl:
             batch = {k: v.to(device) for k, v in batch.items()}
@@ -178,36 +199,56 @@ def main():
                 loss = F.cross_entropy(head(pooled_feature(model, batch)), batch["label"])
             opt.zero_grad()
             scaler.scale(loss).backward()
-            scaler.step(opt); scaler.update()
+            scaler.step(opt)
+            scaler.update()
             tot += loss.item()
         val = evaluate(model, head, val_dl, device)
-        print(f"epoch {ep:02d} | train loss {tot/len(train_dl):.3f} | val acc {val['accuracy']:.3f} f1 {val['macro_f1']:.3f}")
+        print(
+            f"epoch {ep:02d} | train loss {tot / len(train_dl):.3f} | val acc {val['accuracy']:.3f} f1 {val['macro_f1']:.3f}"
+        )
         if val["macro_f1"] > best_f1:
             best_f1 = val["macro_f1"]
-            best_state = ({k: v.cpu().clone() for k, v in model.state_dict().items()},
-                          {k: v.cpu().clone() for k, v in head.state_dict().items()})
+            best_state = (
+                {k: v.cpu().clone() for k, v in model.state_dict().items()},
+                {k: v.cpu().clone() for k, v in head.state_dict().items()},
+            )
 
     # Restore best and report test metrics.
     if best_state:
-        model.load_state_dict(best_state[0]); head.load_state_dict(best_state[1])
+        model.load_state_dict(best_state[0])
+        head.load_state_dict(best_state[1])
     test = evaluate(model, head, test_dl, device)
     print(f"\nTEST | accuracy {test['accuracy']:.4f} | macro-F1 {test['macro_f1']:.4f}")
 
     ckpt_path = resolve_path(cfg, "finetune", "ckpt_path")
     ensure_dir(ckpt_path.parent)
-    ckpt = {"model": model.state_dict(), "head": head.state_dict(),
-            "label_names": label_names, "cfg": cfg,
-            "size_bins": tok.size_bins, "iat_bins": tok.iat_bins,
-            "hybrid": bool(args.hybrid)}
+    ckpt = {
+        "model": model.state_dict(),
+        "head": head.state_dict(),
+        "label_names": label_names,
+        "cfg": cfg,
+        "size_bins": tok.size_bins,
+        "iat_bins": tok.iat_bins,
+        "hybrid": bool(args.hybrid),
+        # Which dataset this was trained on, so the demo defaults to the matching one and
+        # a reviewer can tell two same-class checkpoints apart.
+        "data_path": str(data_path),
+        "augment": bool(args.augment),
+    }
     if feat_scaler is not None:
         ckpt["feat_mean"], ckpt["feat_std"] = feat_scaler
     torch.save(ckpt, ckpt_path)
     print(f"Saved classifier -> {ckpt_path}")
 
     if args.metrics_out:
-        out = {"accuracy": test["accuracy"], "macro_f1": test["macro_f1"],
-               "few_shot": args.few_shot, "pretrained": args.pretrained,
-               "n_classes": len(label_names), "label_names": label_names}
+        out = {
+            "accuracy": test["accuracy"],
+            "macro_f1": test["macro_f1"],
+            "few_shot": args.few_shot,
+            "pretrained": args.pretrained,
+            "n_classes": len(label_names),
+            "label_names": label_names,
+        }
         ensure_dir(Path(args.metrics_out).parent)
         Path(args.metrics_out).write_text(json.dumps(out, indent=2))
         print(f"Wrote metrics -> {args.metrics_out}")

@@ -9,6 +9,7 @@ import argparse
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")  # headless-safe
 import matplotlib.pyplot as plt
 import numpy as np
@@ -53,7 +54,6 @@ def plot_fewshot_curve(results: dict[str, list[tuple[int, float]]], out_path: st
 
 
 def _confusion_cli(args):
-    import torch
     from sklearn.model_selection import train_test_split
 
     from cipherflow.data.flow_io import load_flows, to_flow_records

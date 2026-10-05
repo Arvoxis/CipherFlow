@@ -10,6 +10,7 @@ Then it plots macro-F1 vs. K. Pretraining should dominate at small K — the cor
 Prereqs: run make_synthetic and train_mlm first (see README). Run:
     python -m cipherflow.eval.run_fewshot --ks 5 10 25 50 200
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,13 +34,19 @@ def read_f1(path: Path) -> float:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ks", type=int, nargs="+", default=[5, 10, 25, 50, 200],
-                    help="labels-per-class budgets to sweep")
+    ap.add_argument(
+        "--ks", type=int, nargs="+", default=[5, 10, 25, 50, 200], help="labels-per-class budgets to sweep"
+    )
     ap.add_argument("--pretrained", default="artifacts/pretrained.pt")
     ap.add_argument("--epochs", type=int, default=None, help="override finetune epochs for speed")
-    ap.add_argument("--set", dest="overrides", nargs="*", default=[],
-                    help="config overrides forwarded to sub-runs (e.g. model.d_model=64) — "
-                         "must match the pretrained checkpoint's architecture")
+    ap.add_argument(
+        "--set",
+        dest="overrides",
+        nargs="*",
+        default=[],
+        help="config overrides forwarded to sub-runs (e.g. model.d_model=64) — "
+        "must match the pretrained checkpoint's architecture",
+    )
     args = ap.parse_args()
 
     cfg = load_config()
@@ -50,16 +57,43 @@ def main():
     set_items = list(args.overrides)
     if args.epochs:
         set_items.append(f"finetune.epochs={args.epochs}")
-    set_block = (["--set"] + set_items) if set_items else []
-    epoch_override = set_block  # forwarded to the transformer sub-runs
+    # Park every sub-run's checkpoint in the scratch dir. Without this the sweep trains 2*len(ks)
+    # throwaway models straight over artifacts/classifier.pt, quietly replacing the real
+    # classifier with whichever few-shot run finished last.
+    set_items.append(f"finetune.ckpt_path={(tmp / 'sweep_ckpt.pt').relative_to(REPO_ROOT).as_posix()}")
+    epoch_override = ["--set"] + set_items  # forwarded to the transformer sub-runs
 
     results = {"CipherFlow (pretrained)": [], "From-scratch": [], "Classic (RF/XGB)": []}
     for k in args.ks:
-        m_pre = tmp / f"pre_{k}.json"; m_scr = tmp / f"scr_{k}.json"; m_base = tmp / f"base_{k}.json"
-        run(py + ["cipherflow.finetune.train_clf", "--pretrained", args.pretrained,
-                  "--few-shot", str(k), "--metrics-out", str(m_pre)] + epoch_override)
-        run(py + ["cipherflow.finetune.train_clf", "--pretrained", "none",
-                  "--few-shot", str(k), "--metrics-out", str(m_scr)] + epoch_override)
+        m_pre = tmp / f"pre_{k}.json"
+        m_scr = tmp / f"scr_{k}.json"
+        m_base = tmp / f"base_{k}.json"
+        run(
+            py
+            + [
+                "cipherflow.finetune.train_clf",
+                "--pretrained",
+                args.pretrained,
+                "--few-shot",
+                str(k),
+                "--metrics-out",
+                str(m_pre),
+            ]
+            + epoch_override
+        )
+        run(
+            py
+            + [
+                "cipherflow.finetune.train_clf",
+                "--pretrained",
+                "none",
+                "--few-shot",
+                str(k),
+                "--metrics-out",
+                str(m_scr),
+            ]
+            + epoch_override
+        )
         run(py + ["cipherflow.finetune.baselines", "--few-shot", str(k), "--metrics-out", str(m_base)])
         results["CipherFlow (pretrained)"].append((k, read_f1(m_pre)))
         results["From-scratch"].append((k, read_f1(m_scr)))

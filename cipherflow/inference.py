@@ -3,6 +3,7 @@
 Shared by robustness evaluation and the Streamlit demo so there is exactly one code path
 from raw flow -> class probabilities.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -23,16 +24,21 @@ def load_classifier(ckpt_path: str | Path, device=None):
     tok = FlowTokenizer(cfg)
     model = FlowFormer(cfg, ckpt["size_bins"], ckpt["iat_bins"]).to(device)
     n_feats = len(ckpt["feat_mean"]) if ckpt.get("hybrid") else 0
-    head = ClassifierHead(model.pool_dim + n_feats, len(ckpt["label_names"]),
-                          dropout=cfg["model"]["dropout"]).to(device)
+    head = ClassifierHead(
+        model.pool_dim + n_feats, len(ckpt["label_names"]), dropout=cfg["model"]["dropout"]
+    ).to(device)
     model.load_state_dict(ckpt["model"])
     head.load_state_dict(ckpt["head"])
-    model.eval(); head.eval()
+    model.eval()
+    head.eval()
     # Attach hybrid feature scaler so predict/embed can rebuild the exact input.
     model._hybrid = bool(ckpt.get("hybrid", False))
     if model._hybrid:
         model._feat_mean = ckpt["feat_mean"]
         model._feat_std = ckpt["feat_std"]
+    # Training provenance, absent on checkpoints saved before this was recorded.
+    model._data_path = ckpt.get("data_path")
+    model._augment = bool(ckpt.get("augment", False))
     return model, head, tok, ckpt["label_names"], cfg
 
 

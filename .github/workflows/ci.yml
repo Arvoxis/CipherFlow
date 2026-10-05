@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # CPU torch only. The CUDA wheel is ~2.5 GB and CI has no GPU; the code
+      # auto-detects device, so CPU exercises exactly the same paths.
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check cipherflow tests
+
+      - name: Unit tests
+        run: pytest -q
+
+      # Proves the three claims still wire together end to end on a tiny budget.
+      # Keep it small: this is a wiring check, not the experiment.
+      - name: Pipeline smoke
+        run: |
+          python -m cipherflow.pipeline --quick --mode easy --n-per-class 60 \
+            --set pretrain.epochs=2 finetune.epochs=2
+          python -m cipherflow.provenance
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: |
+            artifacts/run_manifest.json
+            artifacts/*.png
+            artifacts/figures/*.png
+          if-no-files-found: warn
+          retention-days: 14
