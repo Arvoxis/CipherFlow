@@ -18,6 +18,7 @@ Run:
     python -m cipherflow.data.make_synthetic --n-per-class 1500                 # sequential
     python -m cipherflow.data.make_synthetic --mode easy --n-per-class 1500     # easy
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,17 +42,28 @@ def gen_flow_easy(cls: str, rng: np.random.Generator, max_len: int = 40):
     n = rng.integers(12, max_len)
     if cls == "web":
         sizes = np.where(rng.random(n) < 0.4, rng.normal(200, 80, n), rng.normal(1100, 300, n))
-        iats = np.abs(rng.exponential(8, n)); dirs = (rng.random(n) < 0.7).astype(int)
+        iats = np.abs(rng.exponential(8, n))
+        dirs = (rng.random(n) < 0.7).astype(int)
     elif cls == "video_stream":
-        sizes = rng.normal(1350, 120, n); iats = np.abs(rng.normal(6, 2, n)); dirs = (rng.random(n) < 0.9).astype(int)
+        sizes = rng.normal(1350, 120, n)
+        iats = np.abs(rng.normal(6, 2, n))
+        dirs = (rng.random(n) < 0.9).astype(int)
     elif cls == "voip":
-        sizes = rng.normal(160, 25, n); iats = np.abs(rng.normal(20, 3, n)); dirs = (rng.random(n) < 0.5).astype(int)
+        sizes = rng.normal(160, 25, n)
+        iats = np.abs(rng.normal(20, 3, n))
+        dirs = (rng.random(n) < 0.5).astype(int)
     elif cls == "file_transfer":
-        sizes = rng.normal(1460, 30, n); iats = np.abs(rng.exponential(2, n)); dirs = (rng.random(n) < 0.85).astype(int)
+        sizes = rng.normal(1460, 30, n)
+        iats = np.abs(rng.exponential(2, n))
+        dirs = (rng.random(n) < 0.85).astype(int)
     elif cls == "chat":
-        sizes = rng.normal(120, 40, n); iats = np.abs(rng.exponential(120, n)); dirs = (rng.random(n) < 0.5).astype(int)
+        sizes = rng.normal(120, 40, n)
+        iats = np.abs(rng.exponential(120, n))
+        dirs = (rng.random(n) < 0.5).astype(int)
     elif cls == "malware_c2":
-        sizes = rng.normal(90, 15, n); iats = np.abs(rng.normal(1000, 40, n)); dirs = (rng.random(n) < 0.5).astype(int)
+        sizes = rng.normal(90, 15, n)
+        iats = np.abs(rng.normal(1000, 40, n))
+        dirs = (rng.random(n) < 0.5).astype(int)
     else:
         raise ValueError(cls)
     return _clip_sizes(sizes), np.round(iats, 3), dirs.astype(int)
@@ -62,9 +74,9 @@ def gen_flow_easy(cls: str, rng: np.random.Generator, max_len: int = 40):
 # templates are 50/50 in both axes, so per-flow aggregate stats are ~identical across classes;
 # the discriminative signal lives purely in the ORDER.
 SEQ_CLASSES = ["proto_A", "proto_B", "proto_C", "proto_D", "proto_E", "proto_F"]
-SIZE_SMALL = (120, 35)     # mean, std
+SIZE_SMALL = (120, 35)  # mean, std
 SIZE_BIG = (1350, 80)
-IAT_SHARED = 10.0          # same timing distribution for ALL classes (no timing leakage)
+IAT_SHARED = 10.0  # same timing distribution for ALL classes (no timing leakage)
 
 
 def _balanced(L: int, rng) -> np.ndarray:
@@ -103,21 +115,23 @@ def build(mode: str, n_per_class: int, seed: int, seq_len: int) -> pd.DataFrame:
     else:
         classes = SEQ_CLASSES
         templates = build_templates(len(classes), seq_len, seed)
-        tpl_by_cls = dict(zip(classes, templates))
+        tpl_by_cls = dict(zip(classes, templates, strict=True))
         gen = lambda c: gen_flow_seq(tpl_by_cls[c], rng, seq_len)
 
     for cls in classes:
         for _ in range(n_per_class):
             sizes, iats, dirs = gen(cls)
-            rows.append({
-                "flow_id": uuid.uuid4().hex,
-                "splt_ps": sizes.tolist(),
-                "splt_iat": iats.tolist(),
-                "splt_dir": dirs.tolist(),
-                "n_packets": int(len(sizes)),
-                "label": cls,
-                "dataset": f"synthetic_{mode}",
-            })
+            rows.append(
+                {
+                    "flow_id": uuid.uuid4().hex,
+                    "splt_ps": sizes.tolist(),
+                    "splt_iat": iats.tolist(),
+                    "splt_dir": dirs.tolist(),
+                    "n_packets": int(len(sizes)),
+                    "label": cls,
+                    "dataset": f"synthetic_{mode}",
+                }
+            )
     return pd.DataFrame(rows).sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
 

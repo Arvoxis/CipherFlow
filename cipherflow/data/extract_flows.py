@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from cipherflow.data.flow_io import save_flows
-from cipherflow.utils import load_config, resolve_path
+from cipherflow.utils import load_config
 
 
 def _trim(splt_list, n):

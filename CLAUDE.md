@@ -26,10 +26,12 @@ pcap ─► extract_pcap (dpkt) ─► flows.parquet ─► FlowTokenizer
 | `cipherflow/finetune/` | Supervised heads: app ID, C2 detection |
 | `cipherflow/model/` | Transformer definition |
 | `cipherflow/eval/`, `robustness/` | Metrics, plus padding/jitter attack simulations |
-| `cipherflow/serve/` | Streamlit demo |
+| `cipherflow/serve/` | Streamlit demo — 5 tabs, one per claim plus provenance |
 | `cipherflow/pipeline.py`, `inference.py` | Entry points |
+| `cipherflow/provenance.py` | Run stamping into `artifacts/run_manifest.json` |
 | `cipherflow/configs/` | YAML training configs |
 | `scripts/capture_traffic.ps1` | PowerShell pcap capture |
+| `.github/workflows/ci.yml` | ruff + pytest + tiny end-to-end pipeline on every push |
 | `raw/`, `data_out/`, `artifacts/` | Data and outputs — gitignored |
 
 ## Rules
@@ -43,16 +45,28 @@ pcap ─► extract_pcap (dpkt) ─► flows.parquet ─► FlowTokenizer
   when reading a capture, so `extract_flows.py` is kept only as a non-Windows fallback. The
   synthetic generator needs neither — use synthetic data for development.
 - `tests/test_smoke.py` should stay runnable without any real data present.
-- **Env: conda `ml`** (torch+cu121, pyarrow, nfstream, xgboost, streamlit — all present).
-  The leftover `.venv/` directory is stale; ignore it.
-- **Not on GitHub yet** — intentional, it's pre-patent.
+- **Env: conda `ml`** (torch+cu121, pyarrow, xgboost, streamlit, ruff, pytest — all present).
+  The leftover `.venv/` directory is stale; ignore it. Dependencies are declared in
+  `pyproject.toml`; `requirements.txt` is a thin `-e .` pointer, so only edit the former.
+- **`artifacts/classifier.pt` and `pretrained.pt` are the real-captured-traffic demo models**,
+  the ones the IDF quotes. The pipeline writes to those paths by default, so redirect it when
+  you only want a test run: `--set finetune.ckpt_path=artifacts/scratch/classifier.pt
+  pretrain.ckpt_path=artifacts/scratch/pretrained.pt`. Every checkpoint records the dataset it
+  was trained on under `data_path`.
+- **On GitHub at `Arvoxis/CipherFlow` since 2026-10-04.** The repo was pushed public with the
+  IDF and `patent_draft.md` in it, which is a novelty-destroying disclosure under Indian and EPO
+  practice (no grace period). Those files are now gitignored and must stay out of any commit
+  until the application has a filing date. Don't push; Rakshit pushes manually.
 
 ## Running
 
 ```bash
 conda activate ml          # in my own shell; tool calls use the env python.exe directly
+pip install -e ".[dev]"    # once, so `python -m cipherflow.*` works from any directory
 python -m cipherflow.pipeline --quick            # full synthetic run; add --fewshot for the sweep
 python -m cipherflow.pipeline --quick --set model.d_model=64   # config overrides are --set key=value
+python -m cipherflow.provenance                  # print the current run stamp
 streamlit run cipherflow/serve/app.py
+ruff check cipherflow tests
 pytest tests/
 ```

@@ -34,7 +34,7 @@ def load_config(path: str | Path | None = None, overrides: list[str] | None = No
     Values are parsed with YAML so ``true``/``3``/``0.1`` get proper types.
     """
     path = Path(path) if path else DEFAULT_CONFIG
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     for item in overrides or []:

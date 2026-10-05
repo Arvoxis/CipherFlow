@@ -1,9 +1,9 @@
 """Generate patent/report figures programmatically.
 
 Produces clean schematic drawings that match the claims and the deck outline:
-  FIG. 1 — system pipeline (capture -> tokenizer -> encoder -> task heads)
-  FIG. 2 — flow-shape tokenization worked example (Claim A)
-  FIG. 3 — masked-flow-token pretraining schematic (Claim B)
+  FIG. 1. system pipeline (capture -> tokenizer -> encoder -> task heads)
+  FIG. 2. flow-shape tokenization worked example (Claim A)
+  FIG. 3. masked-flow-token pretraining schematic (Claim B)
 FIG. 5 (label-efficiency curve) and the confusion matrix are produced by the eval scripts.
 
 Run:
@@ -13,6 +13,7 @@ Outputs -> artifacts/figures/fig1_pipeline.png, fig2_tokenization.png, fig3_pret
 from __future__ import annotations
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
@@ -54,7 +55,7 @@ def fig1_pipeline(out):
             ha="center", fontsize=8.5, color=GREEN, style="italic")
     ax.text(5.5, 0.35, "No payload bytes are inspected at any stage.",
             ha="center", fontsize=8.5, color=AMBER, style="italic")
-    ax.set_title("FIG. 1 — CipherFlow system pipeline", fontsize=11, loc="left")
+    ax.set_title("FIG. 1. CipherFlow system pipeline", fontsize=11, loc="left")
     fig.tight_layout(); ensure_dir(out.parent); fig.savefig(out, dpi=140); plt.close(fig)
 
 
@@ -68,7 +69,7 @@ def fig2_tokenization(out, tok: FlowTokenizer):
     t.auto_set_font_size(False); t.set_fontsize(8.5); t.scale(1, 1.5)
     for j in range(len(cols)):
         t[0, j].set_facecolor(BLUE); t[0, j].set_text_props(color="white", weight="bold")
-    ax.set_title("FIG. 2 — Flow-shape tokenization (Claim A): (size, IAT, direction) → discrete token id",
+    ax.set_title("FIG. 2. Flow-shape tokenization (Claim A): (size, IAT, direction) → discrete token id",
                  fontsize=10.5, loc="left")
     fig.tight_layout(); ensure_dir(out.parent); fig.savefig(out, dpi=140); plt.close(fig)
 
@@ -93,8 +94,8 @@ def fig3_pretraining(out):
             _arrow(ax, cx, 0.9, cx, 0.35, color="#c53030")
             ax.text(cx, 0.2, "predict\nsize/iat/dir", ha="center", va="top", fontsize=7.5, color="#c53030")
     ax.text(centers[0], 3.15, "15% of packet tokens masked; three heads reconstruct their "
-            "(size, IAT, direction) bins from context — unlabeled.", fontsize=8.5, color=GREY, va="center")
-    ax.set_title("FIG. 3 — Masked-flow-token pretraining (Claim B)", fontsize=11, loc="left")
+            "(size, IAT, direction) bins from context, unlabeled.", fontsize=8.5, color=GREY, va="center")
+    ax.set_title("FIG. 3. Masked-flow-token pretraining (Claim B)", fontsize=11, loc="left")
     fig.tight_layout(); ensure_dir(out.parent); fig.savefig(out, dpi=140); plt.close(fig)
 
 

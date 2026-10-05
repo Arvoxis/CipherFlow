@@ -1,0 +1,16 @@
+# Demo theme. Dark because the viva room projector washes out light backgrounds.
+[theme]
+base = "dark"
+primaryColor = "#4ADE80"
+backgroundColor = "#0B1120"
+secondaryBackgroundColor = "#16203A"
+textColor = "#E6EDF7"
+font = "sans serif"
+
+[server]
+headless = true
+fileWatcherType = "auto"
+maxUploadSize = 400
+
+[browser]
+gatherUsageStats = false

@@ -10,11 +10,13 @@ adversarial testbed that isolates whether a method models *sequence*, not just m
 
 ## 1. Headline: order-defined classes (full labels)
 
+7200 flows total, 1080 held out for test.
+
 | Method | Representation | Test accuracy | Macro-F1 |
 |---|---|---:|---:|
-| RandomForest | hand-crafted aggregate stats | ~0.50 | ~0.50 |
-| XGBoost | hand-crafted aggregate stats | ~0.48 | ~0.48 |
-| **CipherFlow (pretrained→fine-tuned)** | **flow-shape token sequence** | **0.997** | **0.997** |
+| RandomForest | hand-crafted aggregate stats | 0.5009 | 0.4982 |
+| XGBoost | hand-crafted aggregate stats | 0.4833 | 0.4812 |
+| **CipherFlow (pretrained→fine-tuned)** | **flow-shape token sequence** | **0.9944** | **0.9944** |
 
 **Takeaway:** aggregate-statistic baselines cannot separate classes that differ only in
 order and collapse toward chance; CipherFlow's sequence model separates them almost
@@ -26,15 +28,16 @@ Macro-F1 vs. labeled flows per class (`cipherflow.eval.run_fewshot`):
 
 | labels/class | CipherFlow (pretrained) | From-scratch Transformer | Classic RF/XGB |
 |---:|---:|---:|---:|
-| 5   | **0.539** | 0.431 | 0.346 |
-| 25  | **0.939** | 0.705 | 0.418 |
-| 100 | 0.993 | 0.984 | 0.457 |
-| 500 | 0.994 | 0.994 | 0.488 |
+| 5   | **0.789** | 0.365 | 0.346 |
+| 25  | **0.892** | 0.561 | 0.418 |
+| 100 | 0.993 | 0.990 | 0.457 |
+| 500 | 0.998 | 0.999 | 0.488 |
 
 **Takeaways:**
-- **Pretraining's advantage is largest when labels are scarce** — at 25 labels/class it adds
-  **+23 macro-F1 points** over training from scratch (0.939 vs 0.705). This is the
-  self-supervised-pretraining payoff (patent Claim B) and the project's headline story.
+- **Pretraining's advantage is largest when labels are scarce** — at 5 labels/class it more than
+  doubles the from-scratch macro-F1 (0.789 vs 0.365, **+42 points**), and still adds **+33
+  points** at 25/class. This is the self-supervised-pretraining payoff (patent Claim B) and the
+  project's headline story.
 - Pretrained and from-scratch **converge at high labels** (≥100/class), exactly as expected:
   pretraining substitutes for labels.
 - **Classic baselines plateau at ~0.45–0.49** regardless of label budget — more labels can't
@@ -47,25 +50,33 @@ Plot: `artifacts/fewshot_curve.png`.
 Self-supervised pretraining on unlabeled flows — masked-token reconstruction accuracy rises
 as the model learns flow structure:
 
-| epoch | val masked-token acc | val loss |
-|---:|---:|---:|
-| 1 | 0.486 | 4.080 |
-| 6 | 0.585 | 3.112 |
-| 12 | 0.659 | 2.709 |
+| dataset | epoch 1 | final | epochs |
+|---|---:|---:|---:|
+| synthetic (sequential) | 0.485 | 0.669 | 12 |
+| real capture (`selfcap_f12`) | 0.430 | 0.751 | 20 |
+
+Masked-token reconstruction accuracy, not classification accuracy. Real traffic trains better
+than the synthetic testbed, as expected: real flows carry protocol regularities a generator
+doesn't reproduce.
 
 ## 4. Robustness to evasion (Claim C)
 
-Classifier evaluated on clean vs. attacker-evaded (padding + timing jitter) test flows:
+**Synthetic:** the order signal survives the attack intact — clean 0.9944, evaded 0.9944, zero
+drop. Padding and jitter perturb magnitudes, and these classes are defined by ordering, so there
+is nothing for the attack to erase.
 
-| condition | accuracy | macro-F1 |
-|---|---:|---:|
-| clean | 0.911 | 0.905 |
-| evaded (padding + jitter) | 0.858 | 0.829 |
-| **drop** | **-0.053** | **-0.076** |
+**Captured real traffic** (`selfcap_f12.parquet`, 5 classes, 1797 flows, 270 test) is where the
+defense is visible:
 
-Train with `--augment` (adversarial augmentation) to shrink this drop — the Claim C defense.
-Re-run `cipherflow.robustness.eval_robustness` on the augmented checkpoint to quote the
-improved number in your report.
+| model | clean | evaded | change |
+|---|---:|---:|---:|
+| RandomForest on flow stats | 0.6481 | 0.5333 | **-0.1148** (-17.7%) |
+| CipherFlow, normally trained | 0.5519 | 0.4852 | **-0.0667** (-12.1%) |
+| CipherFlow, `--augment` | 0.5370 | **0.5519** | **+0.0148** (no loss) |
+
+The augmented model loses nothing to the attack and **overtakes the RandomForest once the
+attacker engages** (0.5519 vs 0.5333), having started behind it. See
+`artifacts/real_robustness.png`.
 
 ## 5. Confusion matrix & learned representation
 - `artifacts/confusion.png` — near-diagonal on the sequential dataset (few cross-class errors).
@@ -79,11 +90,20 @@ improved number in your report.
 `artifacts/figures/`. FIG. 5 (label-efficiency) and the embedding map come from the eval
 scripts. Only FIG. 4 (evasion schematic) is drawn by hand.
 
-## 6. Honesty notes for the report
+## 7. Honesty notes for the report
 - The *easy* synthetic mode is trivially separable by aggregate stats (baselines ~100%) and
   is only a wiring smoke test; all headline claims use the **sequential** mode.
-- Synthetic data validates the *mechanism*. For the final report, **repeat on a real dataset**
-  (ISCXVPN2016 / CIC-Darknet2020 / CIC-IDS2017 — see `data/download.md`) to show the same
-  effects on real encrypted traffic; the pipeline is unchanged (`--data <real>.parquet`).
+- **On the small real capture, RandomForest beats CipherFlow on clean accuracy** (~0.64 vs
+  0.5519). The capture is small and noisy and the deep model is data-hungry. The hybrid head
+  didn't close the gap either (stats-only 0.6597 > hybrid 0.5980 > embedding-only 0.5241).
+  Report this; the defensible real-data win is robustness, not clean accuracy.
 - Numbers here are from a compact CPU-friendly config; a larger model on the GPU (defaults in
-  `configs/default.yaml`) should match or exceed them.
+  `cipherflow/configs/default.yaml`) should match or exceed them.
+- Every run stamps `artifacts/run_manifest.json` with commit, config hash and seed. Quote a
+  number only if a manifest entry backs it.
+
+## 8. Reproducing this file
+```bash
+python -m cipherflow.pipeline --quick --fewshot --n-per-class 1200
+python -m cipherflow.robustness.eval_robustness --ckpt artifacts/classifier_aug.pt --data data_out/selfcap_f12.parquet
+```

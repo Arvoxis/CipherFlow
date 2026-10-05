@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 .venv/
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
 
 # Data & artifacts (regenerable / large)
 data_out/
@@ -11,6 +13,16 @@ raw/
 *.pcap
 *.pcapng
 *.parquet
+
+# Pre-filing patent material. A public repo is a public disclosure, and in India (and at the
+# EPO) that destroys novelty with no grace period. These stay local until the application
+# has a filing date. patent_draft.md is the full specification with the claim set, so it is
+# the single most damaging file here if it is ever pushed.
+CipherFlow_IDF.docx
+CipherFlow_IDF.pdf
+*_IDF.docx
+*_IDF.pdf
+cipherflow/deliverables/patent_draft.md
 
 # OS / editor
 .DS_Store

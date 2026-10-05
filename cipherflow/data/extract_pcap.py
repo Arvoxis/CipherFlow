@@ -21,7 +21,6 @@ import uuid
 from pathlib import Path
 
 import dpkt
-import numpy as np
 import pandas as pd
 
 from cipherflow.data.flow_io import save_flows

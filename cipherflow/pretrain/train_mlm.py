@@ -17,7 +17,6 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from cipherflow.data.flow_io import load_flows, to_flow_records
 from cipherflow.model.flowformer import FlowFormer, count_params
