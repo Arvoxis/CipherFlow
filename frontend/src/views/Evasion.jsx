@@ -7,9 +7,13 @@ import { Err, Panel, Pill, Range, Spinner, Stat } from '../ui'
 export default function Evasion({ dataset, checkpoints, defaults }) {
   // Default to every checkpoint trained on the dataset in view. Putting a normally-trained
   // model next to an augmented one is the entire point of this view, so defaulting to one
-  // checkpoint would hide the result it exists to show.
-  const sameData = checkpoints.filter((c) => c.trained_on === dataset).map((c) => c.name)
-  const [picked, setPicked] = useState(sameData)
+  // checkpoint would hide the result it exists to show. With none trained on it, fall back
+  // to all of them rather than leaving the run button dead.
+  const defaultPick = (list) => {
+    const same = list.filter((c) => c.trained_on === dataset).map((c) => c.name)
+    return same.length ? same : list.map((c) => c.name)
+  }
+  const [picked, setPicked] = useState(() => defaultPick(checkpoints))
   const [pad, setPad] = useState(defaults.pad_prob)
   const [frac, setFrac] = useState(defaults.pad_max_frac)
   const [jitter, setJitter] = useState(defaults.jitter_std_ms)
@@ -19,8 +23,10 @@ export default function Evasion({ dataset, checkpoints, defaults }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    setPicked(checkpoints.filter((c) => c.trained_on === dataset).map((c) => c.name))
+    setPicked(defaultPick(checkpoints))
     setRes(null)
+    // defaultPick closes over `dataset`, which is already a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset, checkpoints])
 
   const run = async () => {

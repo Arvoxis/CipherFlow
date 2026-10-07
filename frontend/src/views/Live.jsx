@@ -13,6 +13,7 @@ export default function Live({ ckpt, dataset, classes }) {
   const [speed, setSpeed] = useState(40)
   const [state, setState] = useState(null)
   const [feed, setFeed] = useState([])
+  const [done, setDone] = useState(false)
   const [error, setError] = useState(null)
 
   // Switching model or dataset invalidates the replay; start the stream over rather than
@@ -22,6 +23,7 @@ export default function Live({ ckpt, dataset, classes }) {
     setOffset(0)
     setState(null)
     setFeed([])
+    setDone(false)
     setError(null)
   }, [ckpt, dataset])
 
@@ -34,8 +36,10 @@ export default function Live({ ckpt, dataset, classes }) {
         if (cancelled) return
         setState(d)
         setFeed((prev) => [...d.rows].reverse().concat(prev).slice(0, FEED_ROWS))
-        if (d.done) setRunning(false)
-        else setOffset((o) => o + batch)
+        if (d.done) {
+          setRunning(false)
+          setDone(true)
+        } else setOffset((o) => o + batch)
       } catch (e) {
         if (!cancelled) {
           setError(e)
@@ -54,6 +58,8 @@ export default function Live({ ckpt, dataset, classes }) {
     setOffset(0)
     setState(null)
     setFeed([])
+    setDone(false)
+    setError(null)
   }
 
   const counts = classes.map((c, i) => ({
@@ -63,6 +69,7 @@ export default function Live({ ckpt, dataset, classes }) {
   }))
   const progress = state ? state.seen / state.total : 0
   const acc = state?.running_accuracy
+  const held = state?.held_out_accuracy
 
   return (
     <div className="space-y-4">
@@ -73,10 +80,11 @@ export default function Live({ ckpt, dataset, classes }) {
           <div className="flex shrink-0 gap-2">
             <button
               onClick={() => setRunning((r) => !r)}
-              className="flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-xs font-semibold text-ink transition hover:brightness-110"
+              disabled={done}
+              className="flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-xs font-semibold text-ink transition hover:brightness-110 disabled:opacity-40"
             >
               {running ? <Pause size={13} /> : <Play size={13} />}
-              {running ? 'Pause' : state ? 'Resume' : 'Start'}
+              {done ? 'Finished' : running ? 'Pause' : state ? 'Resume' : 'Start'}
             </button>
             <button
               onClick={reset}
@@ -110,14 +118,19 @@ export default function Live({ ckpt, dataset, classes }) {
 
         <div className="mt-5 grid gap-3 sm:grid-cols-4">
           <Stat
-            label="Running accuracy"
+            label="Accuracy, all flows"
             value={pct(acc)}
             tone={acc === null || acc === undefined ? 'default' : acc >= 0.5 ? 'good' : 'warn'}
-            sub="against ground truth"
+            sub="includes flows seen in training"
+          />
+          <Stat
+            label="Accuracy, held out"
+            value={pct(held)}
+            tone={held === null || held === undefined ? 'default' : held >= 0.5 ? 'good' : 'warn'}
+            sub={`${state?.held_out_seen ?? 0} of ${state?.held_out_total ?? '--'} test flows`}
           />
           <Stat label="Flows seen" value={state ? state.seen.toLocaleString() : '0'} sub={`of ${state?.total?.toLocaleString() ?? '--'}`} />
           <Stat label="Payload bytes read" value="0" tone="good" sub="shape only" />
-          <Stat label="Classes" value={classes.length} sub={classes.join(', ')} />
         </div>
 
         <div className="mt-4 h-1 overflow-hidden rounded-full bg-edge">
@@ -169,6 +182,7 @@ export default function Live({ ckpt, dataset, classes }) {
                     <th className="pb-2 pr-4 font-medium">predicted</th>
                     <th className="pb-2 pr-4 font-medium">conf</th>
                     <th className="pb-2 pr-4 font-medium">actual</th>
+                    <th className="pb-2 font-medium">split</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -187,6 +201,9 @@ export default function Live({ ckpt, dataset, classes }) {
                         <td className={`py-1 pr-4 ${hit ? 'text-slate-500' : 'text-bad'}`}>
                           {r.actual ?? '--'}
                           {!hit && ' x'}
+                        </td>
+                        <td className={`py-1 ${r.held_out ? 'text-accent' : 'text-slate-600'}`}>
+                          {r.held_out ? 'test' : 'train'}
                         </td>
                       </tr>
                     )

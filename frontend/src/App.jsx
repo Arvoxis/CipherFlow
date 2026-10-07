@@ -51,16 +51,27 @@ export default function App() {
         </code>
       </div>
     )
-  if (!meta || !ckpt || !dataset)
+  if (!meta)
     return (
       <div className="p-10">
         <Spinner label="Loading checkpoints and datasets" />
       </div>
     )
+  if (!ckpt || !dataset)
+    return (
+      <div className="mx-auto max-w-xl space-y-4 p-10">
+        <p className="text-sm text-slate-300">
+          The API is up but found no {meta.checkpoints.length ? 'datasets in data_out/' : 'classifiers in artifacts/'}.
+        </p>
+        <code className="block rounded-md border border-edge bg-panel px-3 py-2 font-mono text-xs text-accent">
+          python -m cipherflow.pipeline --quick
+        </code>
+      </div>
+    )
 
   const model = meta.checkpoints.find((c) => c.name === ckpt)
   const data = meta.datasets.find((d) => d.name === dataset)
-  const mismatch = !data.labels.some((l) => model.classes.includes(l))
+  const mismatch = !data.labels.every((l) => model.classes.includes(l))
 
   return (
     <div className="flex min-h-full">
@@ -113,7 +124,11 @@ export default function App() {
             </div>
             <select
               value={ckpt}
-              onChange={(e) => setCkpt(e.target.value)}
+              onChange={(e) => {
+                setCkpt(e.target.value)
+                const trained = meta.checkpoints.find((c) => c.name === e.target.value)?.trained_on
+                if (trained && meta.datasets.some((d) => d.name === trained)) setDataset(trained)
+              }}
               className="w-full rounded-md border border-edge bg-ink px-2.5 py-1.5 font-mono text-xs outline-none focus:border-accent"
             >
               {meta.checkpoints.map((c) => (

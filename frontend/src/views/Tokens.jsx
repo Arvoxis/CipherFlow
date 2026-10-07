@@ -8,18 +8,25 @@ export default function Tokens({ ckpt, dataset, flows }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
-  useEffect(() => setIdx(0), [dataset])
+  // A smaller dataset can leave idx past its end; clamp here rather than fetching an index
+  // the server will reject and flashing a 400 before a reset effect catches up.
+  const safeIdx = Math.min(idx, Math.max(0, flows - 1))
 
   useEffect(() => {
     let cancelled = false
     setError(null)
-    get('tokenize', { ckpt, dataset, idx })
+    get('tokenize', { ckpt, dataset, idx: safeIdx })
       .then((d) => !cancelled && setData(d))
-      .catch((e) => !cancelled && setError(e))
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e)
+          setData(null) // never show a previous flow's tokens under a fresh error
+        }
+      })
     return () => {
       cancelled = true
     }
-  }, [ckpt, dataset, idx])
+  }, [ckpt, dataset, safeIdx])
 
   return (
     <div className="space-y-4">
@@ -36,7 +43,7 @@ export default function Tokens({ ckpt, dataset, flows }) {
               type="number"
               min={0}
               max={Math.max(0, flows - 1)}
-              value={idx}
+              value={safeIdx}
               onChange={(e) => setIdx(Math.min(Math.max(0, Number(e.target.value) || 0), flows - 1))}
               className="w-28 rounded-md border border-edge bg-ink px-3 py-1.5 font-mono text-sm outline-none focus:border-accent"
             />

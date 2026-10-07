@@ -62,6 +62,22 @@ def _data(dataset: str):
 
 
 @lru_cache(maxsize=16)
+def _held_out_ids(ckpt: str, dataset: str) -> frozenset:
+    """flow_ids of the held-out test split for this checkpoint.
+
+    The replay covers the whole dataset, which is the right demo but the wrong number: most
+    of those flows were in training. Marking the test split lets the UI show both an overall
+    running accuracy and the honest held-out one, instead of only the flattering figure.
+    """
+    _, _, _, label_names, _ = _model(ckpt)
+    try:
+        dfl, y, _ = encode_labels(_data(dataset), label_names=label_names)
+    except Exception:
+        return frozenset()  # labels this checkpoint does not know; no split to speak of
+    return frozenset(dfl["flow_id"].iloc[test_split(y, SEED)].tolist())
+
+
+@lru_cache(maxsize=16)
 def _stream(ckpt: str, dataset: str):
     """Predictions over the whole dataset in a fixed shuffled order.
 
@@ -73,13 +89,17 @@ def _stream(ckpt: str, dataset: str):
     df = _data(dataset).sample(frac=1.0, random_state=0).reset_index(drop=True)
     probs = predict_records(model, head, tok, to_flow_records(df))
     truth = df["label"].tolist() if "label" in df.columns else [None] * len(df)
+    held = _held_out_ids(ckpt, dataset)
+    ids = df["flow_id"].tolist()
+    packets = df["n_packets"].tolist()
     return [
         {
             "flow": i,
             "prediction": label_names[int(p.argmax())],
             "confidence": float(p.max()),
             "actual": truth[i],
-            "packets": int(df["n_packets"].iloc[i]),
+            "packets": int(packets[i]),
+            "held_out": ids[i] in held,
         }
         for i, p in enumerate(probs)
     ]
@@ -174,17 +194,23 @@ def stream(
     window = rows[offset : offset + limit]
     seen = rows[: offset + limit]
     scored = [r for r in seen if r["actual"] is not None]
+    held = [r for r in scored if r["held_out"]]
     counts: dict[str, int] = {}
     for r in seen:
         counts[r["prediction"]] = counts.get(r["prediction"], 0) + 1
+
+    def _acc(rs):
+        return sum(r["actual"] == r["prediction"] for r in rs) / len(rs) if rs else None
+
     return {
         "rows": window,
         "total": len(rows),
         "seen": len(seen),
         "counts": counts,
-        "running_accuracy": (
-            sum(r["actual"] == r["prediction"] for r in scored) / len(scored) if scored else None
-        ),
+        "running_accuracy": _acc(scored),
+        "held_out_accuracy": _acc(held),
+        "held_out_seen": len(held),
+        "held_out_total": sum(r["held_out"] for r in rows),
         "done": offset + limit >= len(rows),
     }
 
@@ -314,6 +340,8 @@ def demo():
 
     s = c.get("/api/stream", params={"ckpt": ck, "dataset": ds, "offset": 0, "limit": 5}).json()
     assert len(s["rows"]) == 5 and s["total"] > 5, s
+    assert 0 < s["held_out_total"] < s["total"], "held-out split looks wrong"
+    assert all("held_out" in r for r in s["rows"]), s["rows"][0]
     # The same window twice must be identical, or the replay order is not reproducible.
     again = c.get("/api/stream", params={"ckpt": ck, "dataset": ds, "offset": 0, "limit": 5}).json()
     assert s["rows"] == again["rows"], "stream order is not stable"
