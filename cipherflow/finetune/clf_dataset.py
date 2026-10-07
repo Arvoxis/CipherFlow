@@ -37,3 +37,18 @@ def clf_collate(batch: list[dict]) -> dict:
     if "feats" in batch[0]:
         out["feats"] = torch.stack([b["feats"] for b in batch])
     return out
+
+
+def test_split(y: np.ndarray, seed: int, n: int | None = None) -> np.ndarray:
+    """Indices of the held-out test split train_clf created: 70/15/15, stratified.
+
+    Every evaluator has to reproduce this exact split or its accuracy means nothing, so the
+    arithmetic lives here once. Pass ``n`` to subsample the split while keeping class balance.
+    """
+    from sklearn.model_selection import train_test_split
+
+    _, tmp = train_test_split(np.arange(len(y)), test_size=0.3, stratify=y, random_state=seed)
+    _, te = train_test_split(tmp, test_size=0.5, stratify=y[tmp], random_state=seed)
+    if n is not None and n < len(te):
+        te, _ = train_test_split(te, train_size=n, stratify=y[te], random_state=seed)
+    return te

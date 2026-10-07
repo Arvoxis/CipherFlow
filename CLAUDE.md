@@ -26,7 +26,9 @@ pcap ─► extract_pcap (dpkt) ─► flows.parquet ─► FlowTokenizer
 | `cipherflow/finetune/` | Supervised heads: app ID, C2 detection |
 | `cipherflow/model/` | Transformer definition |
 | `cipherflow/eval/`, `robustness/` | Metrics, plus padding/jitter attack simulations |
-| `cipherflow/serve/` | Streamlit demo — 5 tabs, one per claim plus provenance |
+| `cipherflow/serve/` | Streamlit demo — 5 tabs, one per claim plus provenance. Kept as the fallback |
+| `cipherflow/api/` | FastAPI JSON service behind the React demo — thin wrapper over `inference.py` |
+| `frontend/` | React 19 + Vite demo (plain JSX, Tailwind 4, recharts) — the one to show |
 | `cipherflow/pipeline.py`, `inference.py` | Entry points |
 | `cipherflow/provenance.py` | Run stamping into `artifacts/run_manifest.json` |
 | `cipherflow/configs/` | YAML training configs |
@@ -66,7 +68,26 @@ pip install -e ".[dev]"    # once, so `python -m cipherflow.*` works from any di
 python -m cipherflow.pipeline --quick            # full synthetic run; add --fewshot for the sweep
 python -m cipherflow.pipeline --quick --set model.d_model=64   # config overrides are --set key=value
 python -m cipherflow.provenance                  # print the current run stamp
-streamlit run cipherflow/serve/app.py
 ruff check cipherflow tests
 pytest tests/
 ```
+
+### The demo
+
+The React UI is what gets shown; the Streamlit app stays as an untouched fallback on 8501.
+
+```bash
+# One process, one port. FastAPI serves /api AND the built UI at http://localhost:8000
+cd frontend && npm run build && cd ..
+python -m uvicorn cipherflow.api.server:app --port 8000
+
+# Developing the frontend instead: two processes, Vite proxies /api to 8000
+python -m uvicorn cipherflow.api.server:app --port 8000   # terminal 1
+cd frontend && npm run dev                                # terminal 2, http://localhost:5173
+
+python -m cipherflow.api.server      # hits every endpoint in-process, no server needed
+streamlit run cipherflow/serve/app.py                     # fallback demo
+```
+
+`frontend/dist/` is gitignored, so a fresh clone needs `npm install && npm run build` before
+the single-port form works. The API answers either way.
