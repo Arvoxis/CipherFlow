@@ -24,6 +24,10 @@ CipherFlow_IDF.pdf
 *_IDF.pdf
 cipherflow/deliverables/patent_draft.md
 
+# Frontend
+node_modules/
+frontend/dist/
+
 # OS / editor
 .DS_Store
 Thumbs.db
